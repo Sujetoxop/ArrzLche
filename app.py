@@ -1,67 +1,62 @@
 import streamlit as st
 import pandas as pd
+import os
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Arroz con Leche - Gestión por Pedido", layout="wide")
-
+st.set_page_config(page_title="Gestión Arroz con Leche con Guardado Local", layout="wide")
 st.title("Gestión y Ventas - Arroz con Leche")
 
-# --- SECCIÓN 1: Registro de Inversiones por Pedido ---
+# Archivos para guardar datos
+INV_FILE = "datos_inversion.csv"
+VENT_FILE = "datos_ventas.csv"
+
+# Funciones para cargar datos o crear vacíos
+def cargar_datos(filename, columnas):
+    if os.path.exists(filename):
+        return pd.read_csv(filename)
+    else:
+        return pd.DataFrame(columns=columnas)
+
+def guardar_datos(df, filename):
+    df.to_csv(filename, index=False)
+
+# Columnas esperadas para inversiones y ventas
+col_inv = ["Pedido", "Fecha", "Concepto", "Valor"]
+col_vent = ["Pedido", "Fecha", "Cliente", "Unidades", "Precio Unitario", "Pagado"]
+
+# Cargar datos al inicio
+df_inv = cargar_datos(INV_FILE, col_inv)
+df_vent = cargar_datos(VENT_FILE, col_vent)
+
+# SECCIÓN INVERSIONES
 st.header("Inversiones por Pedido")
+df_inv_edit = st.data_editor(df_inv, num_rows="dynamic", key="inv_editor")
+if st.button("Guardar Inversiones"):
+    guardar_datos(df_inv_edit, INV_FILE)
+    st.success("Datos de inversiones guardados.")
 
-# Tabla editable para registrar inversiones con pedido, fecha, concepto y valor
-inv_data = st.data_editor(
-    pd.DataFrame({
-        "Pedido": ["Pedido 1", "Pedido 1", "Pedido 2"],
-        "Fecha": ["2025-07-20", "2025-07-20", "2025-07-22"],
-        "Concepto": ["Arroz", "Leche Condensada", "Canela"],
-        "Valor": [5000, 3200, 2000]
-    }),
-    num_rows="dynamic",
-    key="inv"
-)
-
-# Total invertido por pedido (agrupando)
-total_inv_por_pedido = inv_data.groupby("Pedido")["Valor"].sum()
-
-# Mostrar totales por pedido
-st.subheader("Total Inversión por Pedido")
-st.table(total_inv_por_pedido)
-
-# Gráfico barras: inversión por pedido
-fig_inv, ax_inv = plt.subplots()
-ax_inv.bar(total_inv_por_pedido.index, total_inv_por_pedido.values, color="#5A9")
-ax_inv.set_ylabel("Valor ($)")
-ax_inv.set_title("Inversión Total por Pedido")
-st.pyplot(fig_inv)
-
-# --- SECCIÓN 2: Registro de Ventas por Pedido ---
+# SECCIÓN VENTAS
 st.header("Ventas por Pedido")
-
-# Tabla editable para registrar ventas con pedido, fecha, cliente, unidades, precio unitario, pagado
-ventas_data = st.data_editor(
-    pd.DataFrame({
-        "Pedido": ["Pedido 1", "Pedido 1", "Pedido 2"],
-        "Fecha": ["2025-07-25", "2025-07-26", "2025-07-28"],
-        "Cliente": ["Andrea", "Carlos", "Ana"],
-        "Unidades": [10, 5, 8],
-        "Precio Unitario": [1800, 1800, 2500],
-        "Pagado": [18000, 9000, 20000]
-    }),
-    num_rows="dynamic",
-    key="ventas"
-)
+df_vent_edit = st.data_editor(df_vent, num_rows="dynamic", key="vent_editor")
 
 # Calcular total venta (Unidades * Precio Unitario)
-ventas_data["Total Venta"] = ventas_data["Unidades"] * ventas_data["Precio Unitario"]
+if not df_vent_edit.empty:
+    df_vent_edit["Total Venta"] = df_vent_edit["Unidades"].astype(float) * df_vent_edit["Precio Unitario"].astype(float)
+else:
+    df_vent_edit["Total Venta"] = []
 
-# Sumar total ventas por pedido
-total_ventas_por_pedido = ventas_data.groupby("Pedido")["Total Venta"].sum()
+if st.button("Guardar Ventas"):
+    guardar_datos(df_vent_edit, VENT_FILE)
+    st.success("Datos de ventas guardados.")
 
-# Sumar total pagado por pedido
-total_pagado_por_pedido = ventas_data.groupby("Pedido")["Pagado"].sum()
+# Mostrar resumen ventas y pagos por pedido
+if not df_vent_edit.empty:
+    total_ventas_por_pedido = df_vent_edit.groupby("Pedido")["Total Venta"].sum()
+    total_pagado_por_pedido = df_vent_edit.groupby("Pedido")["Pagado"].sum()
+else:
+    total_ventas_por_pedido = pd.Series(dtype=float)
+    total_pagado_por_pedido = pd.Series(dtype=float)
 
-# Mostrar tabla resumen ventas y pagos por pedido
 resumen_ventas = pd.DataFrame({
     "Total Ventas": total_ventas_por_pedido,
     "Total Pagado": total_pagado_por_pedido
@@ -70,35 +65,45 @@ resumen_ventas = pd.DataFrame({
 st.subheader("Resumen Ventas y Pagos por Pedido")
 st.table(resumen_ventas)
 
-# Gráfico barras: total ventas por pedido
-fig_ventas, ax_ventas = plt.subplots()
-ax_ventas.bar(total_ventas_por_pedido.index, total_ventas_por_pedido.values, color="#69C")
-ax_ventas.set_ylabel("Valor ($)")
-ax_ventas.set_title("Ventas Totales por Pedido")
-st.pyplot(fig_ventas)
+# Mostrar totales inversión por pedido
+if not df_inv_edit.empty:
+    total_inv_por_pedido = df_inv_edit.groupby("Pedido")["Valor"].sum()
+else:
+    total_inv_por_pedido = pd.Series(dtype=float)
 
-# --- SECCIÓN 3: Cálculo de Utilidad Neta por Pedido ---
-st.header("Utilidad Neta por Pedido")
+st.subheader("Total Inversión por Pedido")
+st.table(total_inv_por_pedido)
 
-# Combinar inversión y ventas en un solo DataFrame para cálculo de utilidad
+# Cálculo utilidad neta (Ingreso - Inversión)
 df_utilidad = pd.DataFrame({
     "Inversión": total_inv_por_pedido,
     "Ingreso por Ventas": total_ventas_por_pedido
-})
-
-# Calcular utilidad neta = Ingreso por ventas - inversión (puede ser negativa si hay pérdidas)
+}).fillna(0)
 df_utilidad["Utilidad Neta"] = df_utilidad["Ingreso por Ventas"] - df_utilidad["Inversión"]
 
-# Mostrar la utilidad neta por pedido
+st.header("Utilidad Neta por Pedido")
 st.table(df_utilidad)
 
-# Gráfico líneas: utilidad neta por pedido
-fig_utilidad, ax_utilidad = plt.subplots()
-ax_utilidad.bar(df_utilidad.index, df_utilidad["Utilidad Neta"], color=["#4CAF50" if u >= 0 else "#F44336" for u in df_utilidad["Utilidad Neta"]])
-ax_utilidad.set_ylabel("Utilidad Neta ($)")
-ax_utilidad.set_title("Utilidad Neta por Pedido")
-st.pyplot(fig_utilidad)
+# Gráficos
 
-# Mensaje final para el usuario
-st.success("Puedes editar los datos de inversión y ventas por pedido. Todos los cálculos y gráficos se actualizan automáticamente.")
+# Gráfico inversión
+fig1, ax1 = plt.subplots()
+ax1.bar(total_inv_por_pedido.index, total_inv_por_pedido.values, color="#5A9")
+ax1.set_ylabel("Valor ($)")
+ax1.set_title("Inversión Total por Pedido")
+st.pyplot(fig1)
 
+# Gráfico ventas
+fig2, ax2 = plt.subplots()
+ax2.bar(total_ventas_por_pedido.index, total_ventas_por_pedido.values, color="#69C")
+ax2.set_ylabel("Valor ($)")
+ax2.set_title("Ventas Totales por Pedido")
+st.pyplot(fig2)
+
+# Gráfico utilidad neta con colores
+fig3, ax3 = plt.subplots()
+colors = ["#4CAF50" if val >= 0 else "#F44336" for val in df_utilidad["Utilidad Neta"]]
+ax3.bar(df_utilidad.index, df_utilidad["Utilidad Neta"], color=colors)
+ax3.set_ylabel("Valor ($)")
+ax3.set_title("Utilidad Neta por Pedido")
+st.pyplot(fig3)
